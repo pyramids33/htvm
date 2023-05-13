@@ -1,0 +1,1 @@
+curl -v -F "filePath=test/dev.txt" -F fileData="@./dev.txt" --header "x-authkey: aabbbcceee" http://127.0.0.1:8098/.api/upload
