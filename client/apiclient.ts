@@ -69,4 +69,11 @@ export class ApiClient {
         return this.client.postFormData('/.api/upload', { filePath, fileData }, { onProgressFn });
     }
 
+    payments () {
+        return this.client.postFormData('/.api/payments');
+    }
+
+    deletePayments (deleteList:string) {
+        return this.client.postFormData('/.api/payments/delete', { delete: deleteList });
+    }
 }

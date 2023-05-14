@@ -67,7 +67,7 @@ pl.addPriceInfo({ pattern: '/images', amount: 1 });
     // url matches specific pattern over wildcard
     const result = pl.matchUrl('/test1/abc/x/');
     assertEquals(result, {
-        match: "/test1/abc/x/",
+        urlMatch: "/test1/abc/x/",
         priceInfo: { "pattern": "/test1/abc/x", "amount": 1 }
     });
 }
@@ -75,7 +75,7 @@ pl.addPriceInfo({ pattern: '/images', amount: 1 });
     // url matches wilcard pattern
     const result = pl.matchUrl('/test1/xyz/x/');
     assertEquals(result, {
-        match: "/test1/xyz/x/",
+        urlMatch: "/test1/xyz/x/",
         priceInfo: { "pattern": "/test1/*/x", "amount": 1 }
     });
 }
@@ -83,7 +83,7 @@ pl.addPriceInfo({ pattern: '/images', amount: 1 });
     // url matches pattern with most matching segments
     const result = pl.matchUrl('/test1/xyz/x/fx');
     assertEquals(result, {
-        match: "/test1/xyz/x/fx",
+        urlMatch: "/test1/xyz/x/fx",
         priceInfo: { "pattern": "/test1/*/x/fx", "amount": 1 }
     });
 }
@@ -91,7 +91,7 @@ pl.addPriceInfo({ pattern: '/images', amount: 1 });
     // url matches prefix
     const result = pl.matchUrl('/test1/xyz/x/fx2');
     assertEquals(result, {
-        match: "/test1/xyz/x/",
+        urlMatch: "/test1/xyz/x/",
         priceInfo: { "pattern": "/test1/*/x", "amount": 1 }
     });
 }
@@ -101,12 +101,12 @@ pl.addPriceInfo({ pattern: '/images', amount: 1 });
     const result2 = pl.matchUrl('/images/volcano.jpeg');
     
     assertEquals(result1, {
-        match: "/images/",
+        urlMatch: "/images/",
         priceInfo: { "pattern": "/images", "amount": 1 },
     });
 
     assertEquals(result2, {
-        match: "/images/",
+        urlMatch: "/images/",
         priceInfo: { "pattern": "/images", "amount": 1 },
     });
 }

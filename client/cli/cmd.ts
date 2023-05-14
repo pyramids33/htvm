@@ -7,6 +7,7 @@ import { walkCmd } from "/client/cli/cmd_walk.ts";
 import { diffCmd } from "/client/cli/cmd_diff.ts";
 import { publishCmd } from "/client/cli/cmd_publish.ts";
 import { statusCmd } from "/client/cli/cmd_status.ts";
+import { paymentsCmd } from "/client/cli/cmd_payments.ts";
 
 export const cmd = new commander.Command('htvm');
 cmd.addCommand(xPubCmd);
@@ -16,7 +17,7 @@ cmd.addCommand(walkCmd);
 cmd.addCommand(diffCmd);
 cmd.addCommand(publishCmd);
 cmd.addCommand(statusCmd);
-
+cmd.addCommand(paymentsCmd);
 
 
 

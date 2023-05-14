@@ -7,15 +7,13 @@ import mstime from "/lib/mstime.ts";
 import { 
     checkSession, 
     readWriteSessionHeaders,
-    lockSessionEx
+    lockSessionMiddleware
 } from "/server/middleware/session.ts";
 
 import { Next } from "/server/oaknext.ts";
 import { RequestState } from "/server/appstate.ts";
 import { Invoice, InvoiceOutput } from "/lib/invoice.ts";
 import { jsonErrorResponse as jsonError } from "../middleware/jsonerror.ts";
-
-
 
 
 // https://github.com/moneybutton/bips/blob/master/bip-0270.mediawiki#PaymentRequest
@@ -56,6 +54,28 @@ export function validatePayment (invOutputs:InvoiceOutput[], tx:bsv.Transaction)
     return {};
 }
 
+async function getCurrentInvoiceFile (currentJsonPath:string) : Promise<Record<string,string>> {
+    try {
+        return JSON.parse(await Deno.readTextFile(currentJsonPath)) as Record<string,string>;
+    } catch (error) {
+        if (error instanceof Deno.errors.NotFound || error instanceof SyntaxError) {
+            return {};
+        } else {
+            throw error;
+        }
+    }
+}
+
+async function tryReadInvoice (invoicePath:string) : Promise<Invoice|undefined> {
+    try {
+        return JSON.parse(await Deno.readTextFile(invoicePath)) as Invoice;
+    } catch {
+        return undefined;
+    }
+}
+
+export const lockSession = lockSessionMiddleware(true, 'sessionId');
+
 export function getBip270Router () : Router<RequestState> {
 
     let endpointNum = 0;
@@ -87,7 +107,7 @@ export function getBip270Router () : Router<RequestState> {
         }
     });
 
-    router.post('/.bip270/new-invoice', jsonError, checkSession, lockSessionEx, async function (ctx:Context<RequestState>) {
+    router.post('/.bip270/new-invoice', jsonError, checkSession, lockSession, async function (ctx:Context<RequestState>) {
         const session = ctx.state.session;
         const app = ctx.state.app;
         const body = Object.fromEntries(await ctx.request.body({ type: 'form' }).value);
@@ -113,37 +133,20 @@ export function getBip270Router () : Router<RequestState> {
 
         const priceInfo = matchResult.priceInfo;
 
-        const currentJsonPath = app.sitePath.sessionInvoicePath(sessionId, 'current.json');
-        let currentInvoices;
-        
-        try {
-            currentInvoices = JSON.parse(await Deno.readTextFile(currentJsonPath)) as Record<string,string>;
-        } catch (error) {
-            if (error instanceof Deno.errors.NotFound) {
-                currentInvoices = {};
-            } else {
-                console.error('Error opening ' + currentJsonPath);
-                ctx.throw(500);
-            }
-        }
+        // current invoices maps invoice.urlPath to recent invoiceId for the urlPath
+        const currentInvoicesFilePath = app.sitePath.sessionInvoicePath(sessionId, 'current.json');
+        const currentInvoices = await getCurrentInvoiceFile(currentInvoicesFilePath);
+        const currentInvoiceId = currentInvoices[matchResult.urlMatch];
 
         let invoice:Invoice|undefined;
 
-        if (currentInvoices[matchResult.match]) {
-            const invoicePath = app.sitePath.sessionInvoicePath(sessionId, currentInvoices[matchResult.match]);
-            
-            try {
-                invoice = JSON.parse(await Deno.readTextFile(invoicePath)) as Invoice;
-            } catch (error) {
-                if (!(error instanceof Deno.errors.NotFound)){
-                    console.error('Error opening ' + invoicePath);
-                    ctx.throw(500);
-                }
-            }
-            
+        if (currentInvoiceId) {
+            const invoicePath = app.sitePath.sessionInvoicePath(sessionId, currentInvoiceId);
+            invoice = await tryReadInvoice (invoicePath);
+
             if (invoice === undefined || invoice.paidAt || invoice.created < mstime.minsAgo(5)) {
                 invoice = undefined;
-                delete currentInvoices[matchResult.match];
+                delete currentInvoices[currentInvoiceId];
             }
         }
 
@@ -153,7 +156,7 @@ export function getBip270Router () : Router<RequestState> {
                 id: id128.Ulid.generate().toCanonical(),
                 created: Date.now(), 
                 domain: app.config.domain, 
-                urlPath: matchResult.match,
+                urlPath: matchResult.urlMatch,
                 priceInfo: priceInfo,
                 outputs: [],
                 subtotal: 0
@@ -176,7 +179,7 @@ export function getBip270Router () : Router<RequestState> {
         }
 
         currentInvoices[invoice.urlPath] = invoice.id;
-        await Deno.writeTextFile(currentJsonPath, JSON.stringify(currentInvoices));
+        await Deno.writeTextFile(currentInvoicesFilePath, JSON.stringify(currentInvoices));
 
         const dataURL = 'bitcoin:?sv&r=' + encodeURIComponent(`https://${invoice.domain}/.bip270/get-invoice?id=${invoice.id}&sessionId=${sessionId}`);
         
@@ -192,7 +195,7 @@ export function getBip270Router () : Router<RequestState> {
     });
 
     router.options('/.bip270/payment-request', allowCORS);
-    router.get('/.bip270/payment-request', allowCORS, jsonError, lockSessionEx, async function (ctx:Context<RequestState>) {
+    router.get('/.bip270/payment-request', allowCORS, jsonError, async function (ctx:Context<RequestState>) {
         const app = ctx.state.app;
         const query = Object.fromEntries(ctx.request.url.searchParams)
         
@@ -224,7 +227,7 @@ export function getBip270Router () : Router<RequestState> {
     });
 
     router.options('/.bip270/pay-invoice', allowCORS);
-    router.post('/.bip270/pay-invoice', allowCORS, jsonError, lockSessionEx, async function (ctx:Context<RequestState>) {
+    router.post('/.bip270/pay-invoice', allowCORS, jsonError, lockSession, async function (ctx:Context<RequestState>) {
         const app = ctx.state.app;
         const config = app.config;
         const body = await ctx.request.body({ type: "json" }).value;
@@ -306,6 +309,7 @@ export function getBip270Router () : Router<RequestState> {
             
             await Deno.writeTextFile(accessFilePath, (Date.now() + mstime.hours(6)).toString());
             await Deno.writeTextFile(invoicePath, JSON.stringify(invoice,null,2));
+            await Deno.rename(invoicePath, app.sitePath.paymentPath(invoice.id));
 
             await app.sse.onPayment(query.sessionId + ' ' + query.invoiceId);
             
@@ -327,7 +331,7 @@ export function getBip270Router () : Router<RequestState> {
         return;
     });
 
-    router.get('/.bip270/devpay-invoice', checkSession, lockSessionEx, async function (ctx:Context<RequestState>) {
+    router.get('/.bip270/devpay-invoice', checkSession, lockSession, async function (ctx:Context<RequestState>) {
         const session = ctx.state.session;
         const app = ctx.state.app;
 
@@ -362,7 +366,8 @@ export function getBip270Router () : Router<RequestState> {
         const accessFilePath = app.sitePath.sessionAccessPath(session.sessionId, invoice.urlPath);
         
         await Deno.writeTextFile(accessFilePath, (Date.now() + mstime.hours(6)).toString());
-        await Deno.writeTextFile(invoicePath, JSON.stringify(invoice,null,2));
+        await Deno.writeTextFile(invoicePath, JSON.stringify(invoice, null, 2));
+        await Deno.rename(invoicePath, app.sitePath.paymentPath(invoice.id));
 
         await app.sse.onPayment(session.sessionId + ' ' + query.invoiceId);
         

@@ -3,6 +3,7 @@ import { errors } from "/deps/oak/deps.ts";
 import { resolvePath } from "/deps/oak/util.ts";
 import * as path from "/deps/std/path/mod.ts";
 import { ensureDir } from "/deps/std/fs/ensure_dir.ts";
+import { default as id128 } from "npm:id128";
 
 import { sha256Hex } from "/lib/sha256.ts";
 import { hexToBuf } from "/lib/buffer.ts";
@@ -10,6 +11,7 @@ import { AsyncQueue } from "/lib/asyncqueue.ts";
 import { RequestState } from "/server/appstate.ts";
 import { Next } from "/server/oaknext.ts";
 import { jsonErrorResponse as jsonError } from "../middleware/jsonerror.ts";
+
 
 async function checkAuthKey (ctx:Context<RequestState>, next:Next) {
     const app = ctx.state.app;
@@ -100,7 +102,6 @@ export function getApiRouter () : Router<RequestState> {
         const app = ctx.state.app;
         const body = ctx.request.body({ type: "form-data"});
         const form = await body.value.read();
-
         const deleteList = (form.fields.delete||'').split('\n');
 
         const aq = new AsyncQueue(100);
@@ -136,6 +137,58 @@ export function getApiRouter () : Router<RequestState> {
         ctx.response.status = 200;
         ctx.response.type = "json";
         ctx.response.body = {};
+    });
+
+    router.post('/.api/payments/delete', async function  (ctx:Context<RequestState>) {
+        const app = ctx.state.app;
+        const body = ctx.request.body({ type: 'form-data'});
+        const form = await body.value.read();
+
+        const deleteList = (form.fields.delete||'').split('\n');
+        let count = 0;
+
+        const aq = new AsyncQueue(100);
+
+        if (deleteList.length > 0) {
+            for (const invoiceId of deleteList) {
+                await aq.queue(Deno.remove(app.sitePath.paymentPath(invoiceId)).catch(() => {}));
+                count += 1;
+            }
+        }
+
+        await aq.done();
+
+        ctx.response.type = "json";
+        ctx.response.status = 200;
+        ctx.response.body = { deleted: count };
+    });
+
+    router.post('/.api/payments', async function (ctx:Context<RequestState>) {
+        const app = ctx.state.app;
+        const body = ctx.request.body({ type: 'form-data'});
+        await body.value.read();
+
+        const list = [];
+    
+        for await (const entry of Deno.readDir(app.sitePath.paymentsPath)) {
+            try {
+                if (id128.Ulid.isCanonical(entry.name)) {
+                    const invoiceFilePath = app.sitePath.paymentPath(entry.name);
+                    const invoiceJson = await Deno.readTextFile(invoiceFilePath);
+                    list.push(invoiceJson);
+                }
+            } catch (error) {
+                console.log(error);
+            }
+
+            if (list.length >= 1000) {
+                break;
+            }
+        }
+
+        ctx.response.status = 200;
+        ctx.response.headers.set("Content-Type", "application/json");
+        ctx.response.body = '[' + list.join(',') + ']';
     });
 
     router.all('/.api/(.*)', function (ctx:Context<RequestState>) {

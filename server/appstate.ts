@@ -1,12 +1,16 @@
 import bsv from "npm:bsv";
 import * as path from "/deps/std/path/mod.ts";
+import { default as id128 } from "npm:id128";
 
 import { PriceList } from "/lib/pricelist.ts";
+import mstime from "/lib/mstime.ts";
 
 import { SitePath } from "/server/sitepath.ts";
 import { Config } from "/server/config.ts";
 import { SSECache } from "/server/ssecache.ts";
-import { Session } from "/server/middleware/session.ts";
+import { Session, lockSession } from "/server/middleware/session.ts";
+
+
 
 const __dirname = path.dirname(path.fromFileUrl(import.meta.url));
 
@@ -35,6 +39,20 @@ export class AppState {
         this.staticPath = config.staticPath || path.join(__dirname, 'static');
     }
 
+    async checkAccess (sessionId:string, urlPath:string) : Promise<boolean> {
+        const key = sessionId + '/' + urlPath;
+        if (this.#access[key] === undefined || this.#access[key] < Date.now()) {
+            try {
+                const accessFilePath = this.sitePath.sessionAccessPath(sessionId, urlPath);
+                this.#access[key] = parseInt(await Deno.readTextFile(accessFilePath), 10);
+            } catch {
+                // ignore
+                return false;
+            }
+        }
+        return this.#access[key] > Date.now();
+    }
+
     nextXPubCounter () {
         this.#xPubCounter += 1;
         return this.#xPubCounter;
@@ -56,15 +74,6 @@ export class AppState {
             }
         }
         return this.#priceList;
-    }
-
-    async runPriceListReloader (delayMs:number) {
-        try {
-            await this.getPriceList(true);
-        } catch (error) {
-            console.error(error);
-        }
-        Deno.unrefTimer(setTimeout(() => this.runPriceListReloader(delayMs).catch(console.error), delayMs));
     }
 
     async getXPub (forceReload=false) {
@@ -89,24 +98,79 @@ export class AppState {
         Deno.unrefTimer(setTimeout(() => this.runXPubReloader(delayMs).catch(console.error), delayMs));
     }
 
-    async checkAccess (sessionId:string, urlPath:string) : Promise<boolean> {
-        const key = sessionId + '/' + urlPath;
-        if (this.#access[key] === undefined || this.#access[key] < Date.now()) {
-            try {
-                const accessFilePath = this.sitePath.sessionAccessPath(sessionId, urlPath);
-                this.#access[key] = parseInt(await Deno.readTextFile(accessFilePath), 10);
-            } catch {
-                // ignore
-                return false;
-            }
+    async runPriceListReloader (delayMs:number) {
+        try {
+            await this.getPriceList(true);
+        } catch (error) {
+            console.error(error);
         }
-        return this.#access[key] > Date.now();
+        Deno.unrefTimer(setTimeout(() => this.runPriceListReloader(delayMs).catch(console.error), delayMs));
     }
 
-    async initSessionLock (sessionId:string) {
-        await Deno.writeTextFile(
-            this.sitePath.sessionLockPath(sessionId),
-            new Date().toISOString(), { createNew: true });
+    async runSessionCleaner (delayMs:number) {
+        try {
+            await this.cleanSessions();
+        } catch (error) {
+            console.error(error);
+        }
+        Deno.unrefTimer(setTimeout(() => this.runSessionCleaner(delayMs).catch(console.error), delayMs));
+    }
+
+    async cleanSessions () {
+        const sessionsPath = this.sitePath.sessionsPath;
+        
+        for await (const entry of Deno.readDir(sessionsPath)) {
+            try {
+                await this.cleanSession(entry.name);
+            } catch (error) {
+                console.error(error);
+            }
+        }
+    }
+    
+    async cleanSession (sessionId:string) {
+        const sessionLockFilePath = this.sitePath.sessionLockPath(sessionId);
+        const sessionAccessPath = this.sitePath.sessionAccessPath(sessionId);
+        const sessionInvoicesPath = this.sitePath.sessionInvoicesPath(sessionId);
+        const paymentsPath = this.sitePath.paymentsPath;
+
+        try {
+            const checkTime = parseInt(await Deno.readTextFile(sessionLockFilePath), 10) || Date.now();
+
+            if (checkTime < mstime.hoursAgo(8)) {
+                await moveSessionInvoices(sessionInvoicesPath, paymentsPath, Date.now());
+                await Deno.remove(path.join(sessionInvoicesPath, 'current.json'));
+                await Deno.remove(sessionInvoicesPath);
+                await Deno.remove(sessionAccessPath, { recursive: true });
+                await Deno.remove(sessionLockFilePath);
+                await Deno.remove(this.sitePath.sessionPath(sessionId));
+                console.log('removed session ' + sessionId);
+            } else {
+                await lockSession(sessionLockFilePath, true, async function () {
+                    await moveSessionInvoices(sessionInvoicesPath, paymentsPath, mstime.minsAgo(15));
+                });
+            }
+        } catch (error) {
+            console.error(error);
+            return;
+        }
+    }
+}
+
+async function moveSessionInvoices (sessionInvoicesPath:string, paymentsPath:string, expiry:number) {
+    for await (const entry of Deno.readDir(sessionInvoicesPath)) {
+        if (entry.name === 'current.json') {
+            continue;
+        } else {
+            if (id128.Ulid.isCanonical(entry.name)) {
+                if (id128.Ulid.fromCanonical(entry.name).time.valueOf() < expiry) {
+                    await Deno.rename(
+                        path.join(sessionInvoicesPath, entry.name), 
+                        path.join(paymentsPath, entry.name)
+                    );
+                }
+            }
+        }
     }
 }
 

@@ -5,9 +5,6 @@ import { AppState } from "/server/appstate.ts";
 import { Config } from "/server/config.ts";
 import mstime from "/lib/mstime.ts";
 
-// import mstime from "/lib/mstime.ts";
-// import { sha256Hex } from "/lib/sha256.ts";
-// import { hexToBuf } from "/lib/buffer.ts";
 
 const __dirname = path.dirname(path.fromFileUrl(import.meta.url));
 
@@ -49,6 +46,7 @@ if (import.meta.main) {
 
     appState.runPriceListReloader(mstime.secs(30)).catch(console.error);
     appState.runXPubReloader(mstime.secs(30)).catch(console.error);
+    appState.runSessionCleaner(mstime.secs(30)).catch(console.error);
 
     await serveSite(appState, {
         abortSignal: abortController.signal,

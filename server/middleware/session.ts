@@ -9,7 +9,7 @@ import { Next } from "/server/oaknext.ts";
 export interface Session {
     sessionId: string,
     createTime: number
-    visitTime: number
+    checkTime: number
 }
 
 export function createSession () : Session {
@@ -19,7 +19,7 @@ export function createSession () : Session {
 }
 
 export function emptySession () : Session {
-    return { sessionId: '', createTime: 0, visitTime: 0 };
+    return { sessionId: '', createTime: 0, checkTime: 0 };
 }
 
 export function sessionFromJSON (jsonString:string) : Session {
@@ -28,7 +28,7 @@ export function sessionFromJSON (jsonString:string) : Session {
         const sessionObj = JSON.parse(jsonString);
         session.sessionId = sessionObj.sessionId || '';
         session.createTime = sessionObj.createTime || 0;
-        session.visitTime = sessionObj.visitTime || 0;
+        session.checkTime = sessionObj.checkTime || 0;
     } catch (error) {
         throw new Error('error parsing json session', { cause: error });
     }
@@ -68,39 +68,60 @@ export async function checkSession (ctx:Context<RequestState>, next:Next) {
         await ctx.send({ root: app.staticPath, path: 'nocookie.html' });
         return;
     } else {
+        const sessionLockFilePath = app.sitePath.sessionLockPath(session.sessionId);
         if (session.createTime === 0) {
             session.createTime = Date.now();
-            session.visitTime = Date.now();
+            session.checkTime = Date.now();
+            
             await app.sitePath.ensureSessionDirs(session.sessionId);
-            await app.initSessionLock(session.sessionId);
+            await Deno.writeTextFile(sessionLockFilePath, Date.now().toString(), { createNew: true });
         } else {
-            session.visitTime = Date.now();
+            // Check in every so often. If the check time is more than
+            // 8 hours ago, we can assume that the cookie will have expired
+            // and the session directory can be cleaned.
+            if (session.checkTime < mstime.minsAgo(10)) {
+                try {
+                    await Deno.writeTextFile(sessionLockFilePath, Date.now().toString(), { create: false });
+                } catch (error) {
+                    console.error(error);
+                    ctx.throw(500);
+                }
+                session.checkTime = Date.now();
+            }
         }
     }
 
     await next();
 }
 
-export function lockSession (exclusive = false) {
-    return async function (ctx:Context<RequestState>, next:Next) {
-        const session = ctx.state.session;
-        const app = ctx.state.app;
-        const sessionLockFilePath = app.sitePath.sessionLockPath(session.sessionId)
-        let sessionLockFile:Deno.FsFile|undefined;
-        try { 
-            sessionLockFile = await Deno.open(sessionLockFilePath);
-            await Deno.flock(sessionLockFile.rid, exclusive);
-            await next();
-        } catch (error) {
-            throw error;
-        } finally {
-            if (sessionLockFile) {
-                await Deno.funlock(sessionLockFile.rid);
-                sessionLockFile.close();
-            }
+export async function lockSession (sessionLockFilePath:string, exclusive = false, next:Next) {
+    let sessionLockFile:Deno.FsFile|undefined;
+    try { 
+        sessionLockFile = await Deno.open(sessionLockFilePath);
+        await Deno.flock(sessionLockFile.rid, exclusive);
+        await next();
+    } catch (error) {
+        throw error;
+    } finally {
+        if (sessionLockFile) {
+            await Deno.funlock(sessionLockFile.rid);
+            sessionLockFile.close();
         }
     }
 }
 
-export const lockSessionEx = lockSession(true);
-export const lockSessionSh = lockSession();
+export function lockSessionMiddleware (exclusive = true, queryParam = 'sessionId') {
+    return async function (ctx:Context<RequestState>, next:Next) {
+        const app = ctx.state.app;
+        const sessionId = ctx.state.session.sessionId || 
+            ctx.request.url.searchParams.get(queryParam) || '';
+        
+        if (!id128.Ulid.isCanonical(sessionId)) {
+            ctx.throw(400);
+        }
+        
+        const sessionLockFilePath = app.sitePath.sessionLockPath(sessionId);
+
+        await lockSession(sessionLockFilePath, exclusive, next);
+    }
+}

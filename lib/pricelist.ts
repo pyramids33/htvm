@@ -35,8 +35,7 @@ interface Node {
     
 interface MatchResult { 
     priceInfo:PriceInfo
-    match: string 
-
+    urlMatch: string 
 }
 
 export class PriceList {
@@ -83,7 +82,7 @@ export class PriceList {
         }
 
         return {
-            match: tmpMatchStr,
+            urlMatch: tmpMatchStr,
             priceInfo: node.priceInfo
         }
     }

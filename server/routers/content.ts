@@ -52,7 +52,7 @@ export function getContentRouter () : Router<RequestState> {
 
             if (matchResult) {
 
-                const hasAccess = await app.checkAccess(session.sessionId, matchResult.match);
+                const hasAccess = await app.checkAccess(session.sessionId, matchResult.urlMatch);
 
                 if (!hasAccess) {
                     ctx.response.status = 402;
