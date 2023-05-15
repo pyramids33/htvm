@@ -69,6 +69,14 @@ export class ApiClient {
         return this.client.postFormData('/.api/upload', { filePath, fileData }, { onProgressFn });
     }
 
+    wipe () {
+        return this.client.postFormData('/.api/wipe');
+    }
+
+    walk () {
+        return this.client.postFormData('/.api/walk');
+    }
+
     payments () {
         return this.client.postFormData('/.api/payments');
     }

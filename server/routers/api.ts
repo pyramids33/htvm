@@ -4,6 +4,7 @@ import { resolvePath } from "/deps/oak/util.ts";
 import * as path from "/deps/std/path/mod.ts";
 import { ensureDir } from "/deps/std/fs/ensure_dir.ts";
 import { default as id128 } from "npm:id128";
+import { emptyDir, walk } from "/deps/std/fs/mod.ts"
 
 import { sha256Hex } from "/lib/sha256.ts";
 import { hexToBuf } from "/lib/buffer.ts";
@@ -52,6 +53,26 @@ export function getApiRouter () : Router<RequestState> {
         return; 
     });
 
+    router.post('/.api/walk', async function name(ctx:Context<RequestState>) {
+        const app = ctx.state.app;
+        const body = ctx.request.body({ type: 'form-data'});
+        await body.value.read();
+        // walk options in form data
+        const res:Array<[ string, number, number ]> = [];
+
+        for await (const entry of walk(app.sitePath.contentPath)) {
+            const relativePath = path.relative(app.sitePath.contentPath, entry.path);  
+            const info = await Deno.stat(entry.path);
+            if (info.isFile) {
+                res.push([ relativePath, info.size, info.mtime?.valueOf()||0 ]);
+            }       
+        }
+
+        ctx.response.status = 200;
+        ctx.response.type = "json";
+        ctx.response.body = res;
+    })
+
     router.post('/.api/download', async function (ctx:Context<RequestState>) {
         const app = ctx.state.app;
         const body = ctx.request.body({ type: 'form-data'});
@@ -89,10 +110,6 @@ export function getApiRouter () : Router<RequestState> {
         await ensureDir(path.dirname(destPath));
         await Deno.rename(reqFile.filename, destPath);
 
-        if (path.basename(destPath) === 'htvm-lock.json') {
-            await Deno.writeTextFile(path.join(app.sitePath.dataPath,'cleanupfiles'), Date.now().toString());
-        }
-
         ctx.response.status = 200;
         ctx.response.type = "json";
         ctx.response.body = {};
@@ -112,6 +129,16 @@ export function getApiRouter () : Router<RequestState> {
 
         await aq.done();
 
+        ctx.response.status = 200;
+        ctx.response.type = "json";
+        ctx.response.body = {};
+    });
+
+    router.post('/.api/wipe', async function (ctx:Context<RequestState>) {
+        const app = ctx.state.app;
+        const body = ctx.request.body({ type: "form-data"});
+        await body.value.read();
+        await emptyDir(app.sitePath.contentPath);
         ctx.response.status = 200;
         ctx.response.type = "json";
         ctx.response.body = {};
