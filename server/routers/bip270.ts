@@ -181,7 +181,7 @@ export function getBip270Router () : Router<RequestState> {
         currentInvoices[invoice.urlPath] = invoice.id;
         await Deno.writeTextFile(currentInvoicesFilePath, JSON.stringify(currentInvoices));
 
-        const dataURL = 'bitcoin:?sv&r=' + encodeURIComponent(`https://${invoice.domain}/.bip270/get-invoice?id=${invoice.id}&sessionId=${sessionId}`);
+        const dataURL = 'bitcoin:?sv&r=' + encodeURIComponent(`https://${invoice.domain}/.bip270/payment-request?id=${invoice.id}&sessionId=${sessionId}`);
         
         ctx.response.status = 200;
         ctx.response.type = "json";

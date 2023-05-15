@@ -18,6 +18,8 @@ export const statusCmd = new commander.Command('status')
     if (data.status !== 'OK') {
         console.error('Status check failed.', data);
         Deno.exit(1);
+    } else {
+        console.log(data);
     }
 
 });
