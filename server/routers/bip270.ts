@@ -227,7 +227,7 @@ export function getBip270Router () : Router<RequestState> {
         const tx:bsv.Tx = bsv.Tx.fromHex(body.transaction);
 
         const txOutNum = tx.txOuts.findIndex((txOut:bsv.TxOut) => 
-            invoice.amount === txOut.valueBn.toNumber() && invoice.script === txOut.script.toHex());
+            invoice.subtotal === txOut.valueBn.toNumber() && invoice.script === txOut.script.toHex());
 
         if (txOutNum < 0) {
             ctx.response.status = 200;
@@ -275,7 +275,7 @@ export function getBip270Router () : Router<RequestState> {
         ) {
             invoice.paidAt = Date.now(); 
             invoice.paymentMethod = 'bip270 ' + mAPIEndpoint.name;
-            invoice.txHash = tx.hash();
+            invoice.txHash = tx.hash().toHex();
             invoice.txOutNum = txOutNum;
             invoice.txHex = body.transaction;
 

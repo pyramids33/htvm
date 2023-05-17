@@ -64,7 +64,8 @@ export const paymentsCmd = new commander.Command('payments')
                     console.error('ERROR', invoice.id, error);
                 }
             }
-        });
+        })(null);
+
 
         response = await apiClient.deletePayments(deleteList.join('\n'))
         responseObj = await checkJsonResponse(response, 200);
