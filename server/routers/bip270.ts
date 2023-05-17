@@ -275,7 +275,7 @@ export function getBip270Router () : Router<RequestState> {
         ) {
             invoice.paidAt = Date.now(); 
             invoice.paymentMethod = 'bip270 ' + mAPIEndpoint.name;
-            invoice.txHash = tx.hash().toHex();
+            invoice.txHash = tx.hash().toString('hex');
             invoice.txOutNum = txOutNum;
             invoice.txHex = body.transaction;
 
