@@ -12,7 +12,7 @@ import {
 
 import { Next } from "/server/oaknext.ts";
 import { RequestState } from "/server/appstate.ts";
-import { Invoice, InvoiceOutput } from "/lib/invoice.ts";
+import { Invoice } from "/lib/invoice.ts";
 import { jsonErrorResponse as jsonError } from "../middleware/jsonerror.ts";
 
 
@@ -29,29 +29,6 @@ async function allowCORS (ctx:Context, next:Next) {
     }
 
     await next();
-}
-
-export function validatePayment (invOutputs:InvoiceOutput[], tx:bsv.Transaction) : { error?: string } {
-    const txOuts:bsv.TxOut[] = [...tx.txOuts];
-    let missingOutput = false;
-
-    for (const specItem of invOutputs) {
-        const n = tx.txOuts.findIndex((txOut:bsv.TxOut) => 
-            specItem.amount === txOut.valueBn.toNumber() && specItem.script === txOut.script.toHex());
-
-        if (n === -1) {
-            missingOutput = true;
-            break;
-        }
-
-        txOuts.splice(n, 1);
-    }
-
-    if (missingOutput) {
-        return { error: 'missing output' };
-    }
-
-    return {};
 }
 
 async function getCurrentInvoiceFile (currentJsonPath:string) : Promise<Record<string,string>> {
@@ -152,29 +129,26 @@ export function getBip270Router () : Router<RequestState> {
 
         if (invoice === undefined) {
 
+            const xPub = await app.getXPub();
+            const xPubString = xPub.toString()
+            const counter = app.nextXPubCounter();
+            const derivationPath = `m/${app.workerId}/${app.startId}/${counter}`;
+            const pubKey = xPub.derive(derivationPath).pubKey;
+            const script = bsv.Address.fromPubKey(pubKey).toTxOutScript().toHex();
+
             invoice = { 
                 id: id128.Ulid.generate().toCanonical(),
                 created: Date.now(), 
                 domain: app.config.domain, 
                 urlPath: matchResult.urlMatch,
                 priceInfo: priceInfo,
-                outputs: [],
-                subtotal: 0
+                subtotal: priceInfo.amount,
+                xPub: xPubString,
+                derivationPath,
+                script
             };
 
-            const xPub = await app.getXPub();
-            const xPubString = xPub.toString()
-
-            const counter = app.nextXPubCounter();
-            const derivationPath = `m/${app.workerId}/${app.startId}/${counter}`;
-            const pubKey = xPub.derive(derivationPath).pubKey;
-            const script = bsv.Address.fromPubKey(pubKey).toTxOutScript().toHex();
-
-            invoice.subtotal += priceInfo.amount;
-            invoice.outputs.push({ amount: priceInfo.amount, xPub: xPubString, derivationPath, script });
-            
             const invoicePath = app.sitePath.sessionInvoicePath(sessionId, invoice.id);
-            
             await Deno.writeTextFile(invoicePath, JSON.stringify(invoice, null, 2));
         }
 
@@ -213,7 +187,7 @@ export function getBip270Router () : Router<RequestState> {
 
         const paymentRequest = {
             network: 'bitcoin',
-            outputs: invoice.outputs.map(item => { return { script: item.script, amount: item.amount }}),
+            outputs: [{ script: invoice.script, amount: invoice.subtotal }],
             creationTimestamp: Math.floor(Date.now()/1000),
             expirationTimestamp: Math.floor((Date.now()+mstime.mins(6))/1000),
             memo: `https://${app.config.domain}${invoice.urlPath}`,
@@ -246,19 +220,19 @@ export function getBip270Router () : Router<RequestState> {
         }
 
         if (typeof(body.transaction) !== 'string') {
-            console.log('invalid transaction');
+            console.error('invalid transaction');
             ctx.throw(400);
         }
 
         const tx:bsv.Tx = bsv.Tx.fromHex(body.transaction);
 
-        const validationResult = validatePayment(invoice.outputs, tx);
+        const txOutNum = tx.txOuts.findIndex((txOut:bsv.TxOut) => 
+            invoice.amount === txOut.valueBn.toNumber() && invoice.script === txOut.script.toHex());
 
-        if (validationResult.error) {
-            console.log(validationResult);
+        if (txOutNum < 0) {
             ctx.response.status = 200;
             ctx.response.type = "json";
-            ctx.response.body = { payment: body, memo: validationResult.error, error: 1 }
+            ctx.response.body = { payment: body, memo: 'missing output', error: 1 }
             return;
         } 
         
@@ -299,10 +273,10 @@ export function getBip270Router () : Router<RequestState> {
             || payload.resultDescription === 'Transaction already known'
             || payload.resultDescription === '257 txn-already-known'
         ) {
-
             invoice.paidAt = Date.now(); 
             invoice.paymentMethod = 'bip270 ' + mAPIEndpoint.name;
-            invoice.txid = tx.id();
+            invoice.txHash = tx.hash();
+            invoice.txOutNum = txOutNum;
             invoice.txHex = body.transaction;
 
             const accessFilePath = app.sitePath.sessionAccessPath(query.sessionId, invoice.urlPath);
@@ -318,7 +292,7 @@ export function getBip270Router () : Router<RequestState> {
             } 
 
         } else {
-            console.log('error payload',payload);
+            console.log('error payload', payload);
             ctx.response.status = 200;
             ctx.response.type = "json";
             ctx.response.body = { payment: body, memo: payload.resultDescription, error: 4 };
@@ -353,10 +327,7 @@ export function getBip270Router () : Router<RequestState> {
         }
 
         const tx = new bsv.Tx();
-        
-        for (const item of invoice.outputs) {
-            tx.addTxOut(new bsv.Bn(item.amount), bsv.Script.fromHex(item.script));
-        }
+        tx.addTxOut(new bsv.Bn(invoice.subtotal), bsv.Script.fromHex(invoice.script));
 
         invoice.paidAt = Date.now(); 
         invoice.paymentMethod = 'dev';

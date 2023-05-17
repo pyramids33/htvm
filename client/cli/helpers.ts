@@ -2,11 +2,14 @@ import * as path from "/deps/std/path/mod.ts";
 
 import { ApiClient } from "/client/apiclient.ts";
 import { LockFile } from "../lockfile.ts";
+import { openDb } from "../db/mod.ts";
+import WalletDbModule from '../db/walletdb.ts';
 
 export const FILES = {
     htvmHost: '.htvm-host',
     htvmLock: 'htvm-lock.json',
     priceList: 'pricelist.json',
+    htvmWallet: '.htvm-wallet',
     xpub: 'xpub.txt'
 };
 
@@ -33,6 +36,19 @@ export async function tryGetLock (sitePath:string) {
     } catch (error) {
         console.error("Failed opening " + htvmLockFilePath + '. ' + error.message);
         Deno.exit(1);
+    }
+}
+
+export function tryOpenDb (sitePath:string) {
+    const dbPath = path.join(sitePath, '.htvm-wallet');
+    try {
+        return openDb(WalletDbModule, dbPath);
+    } catch (error) {
+        if (error.message === '14: unable to open database file') {
+            console.error('Cannot open database: ' + dbPath);
+            Deno.exit(1);
+        }
+        throw error;
     }
 }
 

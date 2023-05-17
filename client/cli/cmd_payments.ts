@@ -3,10 +3,10 @@ import * as path from "/deps/std/path/mod.ts";
 import { ensureDir } from "/deps/std/fs/ensure_dir.ts";
 
 import { sitePathOption } from "./options.ts"
-import { checkJsonResponse, tryGetApiClient } from "./helpers.ts";
+import { FILES, checkJsonResponse, tryGetApiClient } from "./helpers.ts";
 import { Invoice } from "/lib/invoice.ts";
-import { tryStat } from "/lib/trystat.ts";
-
+import { openDb } from "../db/mod.ts";
+import InvoicesDbModule from '../db/invoicesdb.ts';
 
 export const paymentsCmd = new commander.Command('payments')
 .addOption(sitePathOption)
@@ -19,13 +19,15 @@ export const paymentsCmd = new commander.Command('payments')
 
     const apiClient = await tryGetApiClient(options.sitePath);
 
+    const walletPath = path.join(options.sitePath, FILES.htvmWallet);
+    const walletDb = openDb(InvoicesDbModule, walletPath);
+
     let paidSum = 0;
     let paidCount = 0;
     let unpaidCount = 0;
     let existsCount = 0;
 
     while (true) {
-        
         let response = await apiClient.payments();
         let responseObj = await checkJsonResponse(response, 200);
 
@@ -43,27 +45,26 @@ export const paymentsCmd = new commander.Command('payments')
             break;
         }
 
-        for (const invoice of invoices) {
+        walletDb.db.transaction(() => {
+            for (const invoice of invoices) {
+                try {
+                    if (invoice.paidAt) {
+                        paidSum += invoice.subtotal;
+                        paidCount += 1;
+                    } else {
+                        unpaidCount += 1;
+                    }
 
-            if (invoice.paidAt) {
-                paidSum += invoice.subtotal;
-                paidCount += 1;
-            } else {
-                unpaidCount += 1;
+                    walletDb.addInvoice(invoice);
+                    deleteList.push(invoice.id);
+                } catch (error) {
+                    if (error.message === 'UNIQUE constraint failed: invoices.id') {
+                        existsCount += 1;
+                    }
+                    console.error('ERROR', invoice.id, error);
+                }
             }
-
-            const invoiceFilePath = path.join(invoicesPath, invoice.id);
-
-            const stat = await tryStat(invoiceFilePath);
-            
-            if (stat && stat.isFile) {
-                existsCount += 1;
-            }
-
-            await Deno.writeTextFile(invoiceFilePath, JSON.stringify(invoice, null, 2));
-
-            deleteList.push(invoice.id);
-        }
+        });
 
         response = await apiClient.deletePayments(deleteList.join('\n'))
         responseObj = await checkJsonResponse(response, 200);
