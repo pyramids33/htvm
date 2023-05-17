@@ -73,9 +73,9 @@ export const paymentsCmd = new commander.Command('payments')
             console.error(responseObj);
         }
     }
-    
+
     if (paidCount + unpaidCount > 0){
-        console.log(paidCount.toString() + ' paid. total = ' + paidSum.toString() + ' satoshi)');
+        console.log(paidCount.toString() + ' paid. total = ' + paidSum.toString() + ' satoshi');
         console.log(unpaidCount.toString() + ' unpaid. ');
         if (existsCount > 0) {
             console.log('Warning: duplicate invoices detected.', existsCount);
