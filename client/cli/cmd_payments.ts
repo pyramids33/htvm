@@ -27,56 +27,50 @@ export const paymentsCmd = new commander.Command('payments')
     let unpaidCount = 0;
     let existsCount = 0;
 
-    while (true) {
-        let response = await apiClient.payments();
-        let responseObj = await checkJsonResponse(response, 200);
+    let response = await apiClient.payments();
+    let responseObj = await checkJsonResponse(response, 200);
 
-        if (responseObj.error) {
-            console.error(responseObj);
-            break;
-        }
+    if (responseObj.error) {
+        console.error(responseObj);
+        return;
+    }
 
-        const deleteList:string[] = [];
-        const invoices = responseObj as Invoice[];
+    const deleteList:string[] = [];
+    const invoices = responseObj as Invoice[];
 
-        console.log('received ' + invoices.length + ' invoice payments.');
+    console.log('received ' + invoices.length + ' invoice payments.');
 
-        if (invoices.length === 0) {
-            break;
-        }
+    if (invoices.length === 0) {
+        return;
+    }
 
-        walletDb.db.transaction(() => {
-            for (const invoice of invoices) {
-                try {
-                    if (invoice.paidAt) {
-                        paidSum += invoice.subtotal;
-                        paidCount += 1;
-                    } else {
-                        unpaidCount += 1;
-                    }
-
-                    walletDb.addInvoice(invoice);
-                    deleteList.push(invoice.id);
-                } catch (error) {
-                    if (error.message === 'UNIQUE constraint failed: invoices.id') {
-                        existsCount += 1;
-                    }
-                    console.error('ERROR', invoice.id, error);
+    walletDb.db.transaction(() => {
+        for (const invoice of invoices) {
+            try {
+                if (invoice.paidAt) {
+                    paidSum += invoice.subtotal;
+                    paidCount += 1;
+                } else {
+                    unpaidCount += 1;
                 }
+
+                walletDb.addInvoice(invoice);
+                deleteList.push(invoice.id);
+            } catch (error) {
+                if (error.message === 'UNIQUE constraint failed: invoices.id') {
+                    existsCount += 1;
+                }
+                console.error('ERROR', invoice.id, error);
             }
-        })(null);
+        }
+    })(null);
 
-
+    if (deleteList.length > 0) {
         response = await apiClient.deletePayments(deleteList.join('\n'))
         responseObj = await checkJsonResponse(response, 200);
-
+    
         if (responseObj.error) {
             console.error(responseObj);
-            break;
-        }
-
-        if (existsCount > 0) {
-            break;
         }
     }
     
