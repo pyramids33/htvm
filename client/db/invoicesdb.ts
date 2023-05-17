@@ -72,6 +72,7 @@ export function getApi (db:Database) : InvoicesDbApi {
         from invoiceOutputs
             inner join invoices on invoiceOutputs.invoiceId = invoices.id
         where invoiceOutputs.redeemTxHash is null 
+            and invoiceOutputs.invTxHash is not null
             and invoiceOutputs.rowid > ? 
         order by invoiceOutputs.rowid limit 1`);
 
@@ -103,13 +104,15 @@ export function getApi (db:Database) : InvoicesDbApi {
                     created: invoice.created, 
                     jsondata: JSON.stringify(invoice) 
                 });
-                psAddOutput.run({ 
-                    invoiceId: invoice.id, 
-                    invTxHash: invoice.txHash||null, 
-                    invTxOutNum: invoice.txOutNum === undefined ? null : invoice.txOutNum,
-                    redeemTxHash: invoice.redeemTxHash || null,
-                    redeemTxInNum: invoice.redeemTxInNum === undefined ? null : invoice.redeemTxInNum
-                });
+                if (invoice.txHash) {
+                    psAddOutput.run({ 
+                        invoiceId: invoice.id, 
+                        invTxHash: invoice.txHash||null, 
+                        invTxOutNum: invoice.txOutNum === undefined ? null : invoice.txOutNum,
+                        redeemTxHash: invoice.redeemTxHash || null,
+                        redeemTxInNum: invoice.redeemTxInNum === undefined ? null : invoice.redeemTxInNum
+                    });
+                }
             })(null);
 
             return added;

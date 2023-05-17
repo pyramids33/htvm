@@ -14,7 +14,7 @@ export const redeemCmd = new commander.Command('redeem')
 .addOption(sitePathOption)
 .requiredOption('-a --address <address>', 'destination address to redeem', validateAddress)
 .option('-b --broadcast', 'broadcast the transaction (txid printed to stdout)', false)
-.option('-p --process', 'process thes transaction (if broadcast succeeds)', false)
+.option('-p --process', 'process the transaction (if broadcast succeeds)', false)
 .option('-o --outputPath', 'path to save tx as a binary file')
 .action(async (options) => {
     const sitePath = options.sitePath;

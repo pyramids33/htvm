@@ -20,7 +20,7 @@ export const txCmd = new commander.Command('tx')
         const txbuf = Deno.readFileSync(options.filePath);
         tx = bsv.Tx.fromBuffer(bsv.deps.Buffer.from(txbuf));
     } else if (options.txid) {
-        const res = await fetch('https://api.whatsonchain.com/v1/bsv/main/tx/'+options.txid);
+        const res = await fetch('https://api.whatsonchain.com/v1/bsv/main/tx/'+options.txid+'/hex');
         if (res.ok) {
             const bodyText = await res.text();
             tx = bsv.Tx.fromHex(bodyText);

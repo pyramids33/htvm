@@ -15,16 +15,14 @@ export function buildTransaction (db:WalletDbApi, addressTo:bsv.Address) : bsv.T
 
     while (true) {
         const invoiceOutput = db.nextUnspentOutput(lastRowId);
-        
+
         if (invoiceOutput === undefined || invOutputs.length === 1000) {
             break;
         }
 
-        if (invoiceOutput.invTxHash) {
-            lastRowId = invoiceOutput.rowid!;
-            invOutputs.push(invoiceOutput);
-            tx.addTxIn(bsv.deps.Buffer.from(invoiceOutput.invTxHash,'hex'), invoiceOutput.invTxOutNum, new bsv.Script());
-        }
+        lastRowId = invoiceOutput.rowid!;
+        invOutputs.push(invoiceOutput);
+        tx.addTxIn(bsv.deps.Buffer.from(invoiceOutput.invTxHash,'hex'), invoiceOutput.invTxOutNum, new bsv.Script());
     }
 
     const valueIn = new bsv.Bn(invOutputs.reduce((p, c) => p + c.amount, 0));
