@@ -2,13 +2,14 @@ import { Invoice } from "/lib/invoice.ts";
 import { Database } from "./mod.ts";
 
 export interface InvoicesDbApi {
-    db:Database,
-    addInvoice (f:Invoice) : number,
-    invoiceById (id:string) : InvoiceRow|undefined,
+    db:Database
+    addInvoice (f:Invoice) : number
+    invoiceById (id:string) : InvoiceRow|undefined
     listInvoices () : InvoiceRow[]
     nextUnspentOutput (afterRowId:number) : InvoiceOutputRow
     markSpent (invTxHash:string, invTxOutNum:number, redeemTxHash:string, redeemTxInNum:number) : void
     listOutputs(): InvoiceOutputRow[]
+    showBalance(): { amount:number, num:number }
 }
 
 export interface InvoiceRow extends Record<string, unknown> {
@@ -93,6 +94,13 @@ export function getApi (db:Database) : InvoicesDbApi {
     const psListOutputs = db.prepare(`
         select * from invoiceOutputs order by invoiceId, invTxOutNum`);
 
+    const psShowBalance = db.prepare(`
+        select 
+            sum(json_extract(invoices.jsondata, '$.subtotal')) as total,
+            count(invoices.id) as num
+        from invoices
+        where json_extract(invoices.jsondata, '$.redeemTxHash') is null`);
+
     return {
         db,
         addInvoice (invoice:Invoice) {
@@ -136,6 +144,9 @@ export function getApi (db:Database) : InvoicesDbApi {
         },
         listOutputs () {
             return psListOutputs.all();
+        },
+        showBalance () {
+            return psShowBalance.get() || { amount:0, num:0 };
         }
     }
 }

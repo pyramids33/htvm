@@ -26,7 +26,7 @@ if (import.meta.main) {
     const configFilePath = Deno.args[0];
     
     console.log('htvm server');
-    console.log('config: ', configFilePath);
+    console.log('config:', configFilePath);
 
     const config:Config = JSON.parse(Deno.readTextFileSync(configFilePath));
 
@@ -43,6 +43,23 @@ if (import.meta.main) {
     if (config.ensureDirs) {
         await appState.sitePath.ensureDirs();
     }
+
+    const startIdFilePath = path.join(config.dataPath, 'start');
+
+    try {
+        appState.startId = parseInt(await Deno.readTextFile(startIdFilePath));
+    } catch (error) {
+        if (!(error instanceof Deno.errors.NotFound)) {
+            console.error(error);
+            Deno.exit(1);
+        }
+    }
+
+    appState.startId += 1;
+    await Deno.writeTextFile(startIdFilePath, appState.startId.toString());
+
+    console.log('startId =', appState.startId);
+    console.log('workerId =', appState.workerId);
 
     appState.runPriceListReloader(mstime.secs(30)).catch(console.error);
     appState.runXPubReloader(mstime.secs(30)).catch(console.error);
