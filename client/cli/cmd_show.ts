@@ -11,6 +11,7 @@ showCmd.command('balance')
 .action((options) => {
     const db = tryOpenDb(options.sitePath);
     console.log(db.showBalance());
+    db.db.close();
 });
 
 showCmd.command('invoices')
@@ -21,4 +22,5 @@ showCmd.command('invoices')
     for (const inv of db.listInvoices()) {
         console.log(JSON.parse(inv.jsondata));
     }
+    db.db.close();
 });
