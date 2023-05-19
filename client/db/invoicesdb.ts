@@ -149,7 +149,7 @@ export function getApi (db:Database) : InvoicesDbApi {
             return psListOutputs.all();
         },
         showBalance () {
-            return psShowBalance.get() || { amount:0, num:0 };
+            return psShowBalance.get() || { total:0, num:0 };
         }
     }
 }
