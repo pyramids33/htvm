@@ -9,7 +9,7 @@ export interface InvoicesDbApi {
     nextUnspentOutput (afterRowId:number) : InvoiceOutputRow
     markSpent (invTxHash:string, invTxOutNum:number, redeemTxHash:string, redeemTxInNum:number) : void
     listOutputs(): InvoiceOutputRow[]
-    showBalance(): { amount:number, num:number }
+    showBalance(): { total:number, num:number }
 }
 
 export interface InvoiceRow extends Record<string, unknown> {
@@ -96,10 +96,13 @@ export function getApi (db:Database) : InvoicesDbApi {
 
     const psShowBalance = db.prepare(`
         select 
-            sum(json_extract(invoices.jsondata, '$.subtotal')) as total,
+            coalesce(cast(sum(json_extract(invoices.jsondata, '$.subtotal')) as bigint),0) as total,
             count(invoices.id) as num
         from invoices
-        where json_extract(invoices.jsondata, '$.redeemTxHash') is null`);
+            inner join invoiceOutputs on invoices.id = invoiceOutputs.invoiceId
+        where json_extract(invoices.jsondata, '$.paidAt') is not null
+          and invoiceOutputs.redeemTxHash is null
+          and invoiceOutputs.invTxHash is not null;`);
 
     return {
         db,

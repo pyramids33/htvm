@@ -1,6 +1,7 @@
 import * as commander from "npm:commander";
 import { sitePathOption } from "./options.ts"
 import {  tryOpenDb } from "./helpers.ts";
+import { Invoice } from "../../lib/invoice.ts";
 
 
 export const showCmd = new commander.Command('show')
@@ -10,7 +11,8 @@ showCmd.command('balance')
 .addOption(sitePathOption)
 .action((options) => {
     const db = tryOpenDb(options.sitePath);
-    console.log(db.showBalance());
+    const balance = db.showBalance();
+    console.log("Balance:", balance.total||0, " ("+balance.num+" invoices)");
     db.db.close();
 });
 
@@ -19,8 +21,20 @@ showCmd.command('invoices')
 .addOption(sitePathOption)
 .action((options) => {
     const db = tryOpenDb(options.sitePath);
-    for (const inv of db.listInvoices()) {
-        console.log(JSON.parse(inv.jsondata));
-    }
+
+    const rows = db.listInvoices().map((row) => {
+        const invObj = JSON.parse(row.jsondata) as Invoice;
+        return { 
+            id: invObj.id, 
+            urlPath:invObj.urlPath,
+            amount:invObj.subtotal, 
+            created:new Date(invObj.created).toISOString(),
+            paidAt:invObj.paidAt ? new Date(invObj.paidAt).toISOString() : '',
+            txOut:invObj.txHash ? invObj.txHash+':'+invObj.txOutNum : '',
+        };
+    });
+
+    rows.forEach(x=>console.table(x))
+    
     db.db.close();
 });

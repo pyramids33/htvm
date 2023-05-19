@@ -64,6 +64,8 @@ export const paymentsCmd = new commander.Command('payments')
             }
         }
     })(null);
+    
+    walletDb.db.close();
 
     if (deleteList.length > 0) {
         response = await apiClient.deletePayments(deleteList.join('\n'))
