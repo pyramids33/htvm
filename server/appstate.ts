@@ -139,11 +139,11 @@ export class AppState {
 
             if (checkTime < mstime.hoursAgo(8)) {
                 await moveSessionInvoices(sessionInvoicesPath, paymentsPath, Date.now());
-                await Deno.remove(path.join(sessionInvoicesPath, 'current.json'));
-                await Deno.remove(sessionInvoicesPath);
-                await Deno.remove(sessionAccessPath, { recursive: true });
-                await Deno.remove(sessionLockFilePath);
-                await Deno.remove(this.sitePath.sessionPath(sessionId));
+                await tryDeleteExisting(path.join(sessionInvoicesPath, 'current.json'));
+                await tryDeleteExisting(sessionInvoicesPath);
+                await tryDeleteExisting(sessionAccessPath, { recursive: true });
+                await tryDeleteExisting(sessionLockFilePath);
+                await tryDeleteExisting(this.sitePath.sessionPath(sessionId));
                 console.log('removed session ' + sessionId);
             } else {
                 await lockSession(sessionLockFilePath, true, async function () {
@@ -156,7 +156,15 @@ export class AppState {
         }
     }
 }
-
+async function tryDeleteExisting (filePath:string, options?:Deno.RemoveOptions) {
+    try {
+        await Deno.remove(filePath, options);
+    } catch (error) {
+        if (!(error instanceof Deno.errors.NotFound)) {
+            throw error;
+        }
+    }
+}
 async function moveSessionInvoices (sessionInvoicesPath:string, paymentsPath:string, expiry:number) {
     for await (const entry of Deno.readDir(sessionInvoicesPath)) {
         if (entry.name === 'current.json') {
