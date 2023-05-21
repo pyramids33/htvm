@@ -14,3 +14,9 @@ See https://bitcoinassociation.net/
 ## HtVM CLI
 - Interact with the server API simply
 - Payment redemption
+
+## Docs
+- [Concept](./docs/concept.md "concept")
+- [PriceList](./docs/pricelist.md "pricelist")
+- [Server](./docs/server.md "server")
+- [Client](./docs/client.md "client")
