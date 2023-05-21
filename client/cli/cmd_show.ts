@@ -2,9 +2,18 @@ import * as commander from "npm:commander";
 import { sitePathOption } from "./options.ts"
 import {  tryOpenDb } from "./helpers.ts";
 import { Invoice } from "../../lib/invoice.ts";
-
+import * as path from "/deps/std/path/mod.ts";
 
 export const showCmd = new commander.Command('show')
+
+showCmd.command('host')
+.description('show host')
+.addOption(sitePathOption)
+.action(async (options) => {
+    const hostFilePath = path.join(options.sitePath, '.htvm-host');
+    const hostInfo = JSON.parse(await Deno.readTextFile(hostFilePath));
+    console.table(hostInfo);
+});
 
 showCmd.command('balance')
 .description('show balance')
