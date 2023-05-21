@@ -190,47 +190,47 @@ Delete payments. Only delete the payments after downloading and saving them.
 
 
 ### /.api/payments
-Download a batch of payments.
-@return Array<Invoice>
+Download a batch of payments.  
+@return Array<Invoice>  
 
 
 ### /.bip270/invoice-sse
-Listen for payment notification. Used on the paywall page. 
-@param {string} invoiceId   
-@return An empty object or { error:string }  
+Listen for payment notification. Used on the paywall page.  
+@param {string} invoiceId    
+@return An empty object or { error:string }   
 
 ### /.bip270/new-invoice
-Create a new invoice. If there is already a recent invoice for the urlPath, it returns that.
-@param {string} urlPath   
-@return {
-    id:string,
-    urlPath:string,
-    subtotal:number,
-    dataURL:string,
-    expiry:number 
-} 
+Create a new invoice. If there is already a recent invoice for the urlPath, it returns that.  
+@param {string} urlPath     
+@return {  
+    id:string,  
+    urlPath:string,  
+    subtotal:number,  
+    dataURL:string,  
+    expiry:number   
+}   
 
 ### /.bip270/payment-request
-Bip270 payment request for an invoice.
-@param {string} queryString.invoiceId
-@param {string} queryString.sessionId   
-@return {
-    network:string
-    outputs: Array<{script:string,amount:number}>,
-    creationTimestamp:number,
-    expirationTimestamp:number,
-    memo:string,
-    paymentUrl:string,
-    merchantData:string
-}
+Bip270 payment request for an invoice.  
+@param {string} queryString.invoiceId  
+@param {string} queryString.sessionId     
+@return {  
+    network:string  
+    outputs: Array<{script:string,amount:number}>,  
+    creationTimestamp:number,  
+    expirationTimestamp:number,  
+    memo:string,  
+    paymentUrl:string,  
+    merchantData:string  
+}  
 
 ### /.bip270/pay-invoice
-Bip270 payment for an invoice.
-@param {string} queryString.invoiceId
-@param {string} queryString.sessionId   
-@param {string} body.transaction - hex encoded string  
-@return { 
-    payment: { transaction:string }, 
-    memo:string, 
-    error:number 
-}
+Bip270 payment for an invoice.  
+@param {string} queryString.invoiceId  
+@param {string} queryString.sessionId    
+@param {string} body.transaction - hex encoded string   
+@return {   
+    payment: { transaction:string },   
+    memo:string,   
+    error:number   
+}  
