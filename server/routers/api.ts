@@ -6,8 +6,6 @@ import { ensureDir } from "/deps/std/fs/ensure_dir.ts";
 import { default as id128 } from "npm:id128";
 import { emptyDir, walk } from "/deps/std/fs/mod.ts"
 
-import { sha256Hex } from "/lib/sha256.ts";
-import { hexToBuf } from "/lib/buffer.ts";
 import { AsyncQueue } from "/lib/asyncqueue.ts";
 import { RequestState } from "/server/appstate.ts";
 import { Next } from "/server/oaknext.ts";
