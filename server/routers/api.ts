@@ -17,18 +17,9 @@ import { jsonErrorResponse as jsonError } from "../middleware/jsonerror.ts";
 async function checkAuthKey (ctx:Context<RequestState>, next:Next) {
     const app = ctx.state.app;
 
-    if (app.config.adminKey) {
-        const siteAuthKeyHash = await sha256Hex(hexToBuf(app.config.adminKey));
-        const userAuthKey = ctx.request.headers.get('x-authkey');
-
-        if (userAuthKey) {
-            const userAuthKeyHash = await sha256Hex(hexToBuf(userAuthKey));
-
-            if (userAuthKeyHash === siteAuthKeyHash) {
-                await next();
-                return;
-            }
-        }
+    if (app.config.adminKey && app.config.adminKey === ctx.request.headers.get('x-authkey')) {
+        await next();
+        return;
     }
 
     ctx.response.status = 403;

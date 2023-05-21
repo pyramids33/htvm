@@ -40,7 +40,7 @@ export async function tryGetLock (sitePath:string) {
 }
 
 export function tryOpenDb (sitePath:string) {
-    const dbPath = path.join(sitePath, '.htvm-wallet');
+    const dbPath = path.join(sitePath, FILES.htvmWallet);
     try {
         return openDb(WalletDbModule, dbPath);
     } catch (error) {
