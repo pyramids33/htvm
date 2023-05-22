@@ -74,7 +74,14 @@ export async function checkSession (ctx:Context<RequestState>, next:Next) {
             session.checkTime = Date.now();
             
             await app.sitePath.ensureSessionDirs(session.sessionId);
-            await Deno.writeTextFile(sessionLockFilePath, Date.now().toString(), { createNew: true });
+            try {
+                await Deno.writeTextFile(sessionLockFilePath, Date.now().toString(), { createNew: true });
+            } catch (error) {
+                if (!(error instanceof Deno.errors.AlreadyExists)) {
+                    console.error(error);
+                    ctx.throw(500);
+                }
+            }
         } else {
             // Check in every so often. If the check time is more than
             // 8 hours ago, we can assume that the cookie will have expired
